@@ -1,0 +1,92 @@
+##########
+version: "3.8"
+##########
+services:
+#####
+  nginx:
+    image: bitnami/nginx:latest
+    container_name: nginx
+    restart: always
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./nginx/vedita-app.conf:/opt/bitnami/nginx/conf/server_blocks/vedita-app.conf:ro
+    networks:
+      - vedita-network
+    links:
+      - php-fpm
+    depends_on:
+      - php-fpm
+
+  php-fpm:
+    image: bitnami/php-fpm:7.4
+    container_name: php-fpm
+    restart: always
+    ports:
+      - "9000"
+    volumes:
+      - ./app:/app:ro
+    networks:
+      - vedita-network
+
+  mariadb-master:
+    image: bitnami/mariadb:latest
+    container_name: mariadb-master
+    restart: always
+    ports:
+      - "3306"
+    volumes:
+      - mariadb-storage-master:/bitnami/mariadb:rw
+    networks:
+      - vedita-network
+    environment:
+      - MARIADB_ROOT_PASSWORD=root
+      - MARIADB_USER=user
+      - MARIADB_PASSWORD=user
+      - MARIADB_DATABASE=vedita-database
+      - MARIADB_REPLICATION_MODE=master
+      - MARIADB_REPLICATION_USER=vedita-replication
+      - MARIADB_REPLICATION_PASSWORD=vedita
+    healthcheck:
+      test: ['CMD', '/opt/bitnami/scripts/mariadb/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+#####
+  mariadb-slave:
+    image: bitnami/mariadb:latest
+    container_name: mariadb-slave
+    restart: always
+    ports:
+      - "3306"
+    volumes:
+      - mariadb-storage-slave:/bitnami/mariadb:rw
+    networks:
+      - vedita-network
+    environment:
+      - MARIADB_REPLICATION_MODE=slave
+      - MARIADB_REPLICATION_USER=vedita-replication
+      - MARIADB_REPLICATION_PASSWORD=vedita
+      - MARIADB_MASTER_HOST=mariadb-master
+      - MARIADB_MASTER_PORT_NUMBER=3306
+      - MARIADB_MASTER_ROOT_PASSWORD=root
+    links:
+      - mariadb-master
+    depends_on:
+      - mariadb-master
+    healthcheck:
+      test: ['CMD', '/opt/bitnami/scripts/mariadb/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+##########
+volumes:
+  mariadb-storage-master:
+  mariadb-storage-slave:
+    driver: local
+##########
+networks:
+  vedita-network:
+    driver: bridge
+##########
